@@ -71,8 +71,9 @@ The four separate subsystem workspaces plus one `integrated_app/` are still appr
 - Data shape confirmed: 10,000 rows and 129 columns per inspected file.
 - Baseline feature extraction, five-fold validation, final training, and test inference completed.
 - Initial Extra Trees macro F1: 0.6181.
-- Improved class-weighted Random Forest macro F1: 0.7191 using the same five folds.
-- Side I remains the main weakness, but its recall improved from 7.1% to 35.7%; Side II recall improved from 70.8% to 91.7%.
+- Class-weighted Random Forest baseline macro F1: 0.7191 using the same five folds.
+- Moderate fold-safe SMOTE plus a fixed Side I probability adjustment improved macro F1 to 0.7791 and Side I recall from the original 35.7% to 64.3%; Side II recall is 79.2% on the dashboard split.
+- Across five repeated fold shuffles, the promoted model achieved average macro F1 0.7948, average Side I precision 47.4%, and average Side I recall 64.3%.
 - A schema-valid 68-row `outputs/rail_predictions.csv` has been generated locally.
 
-The next Rail priority is Side I recall, followed by app integration and deployment—not rebuilding the project structure.
+The next Rail priority is error analysis and deployment while continuing to monitor Side I precision/recall—not rebuilding the project structure.

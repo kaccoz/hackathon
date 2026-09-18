@@ -3,36 +3,81 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 import joblib
 import pandas as pd
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline as ImbalancedPipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from sklearn.pipeline import Pipeline
 
-from rail_cdm.features import extract_feature_table
+from rail_cdm.calibration import ProbabilityAdjustedClassifier
+from rail_cdm.features import FEATURE_VERSION, extract_feature_table
 from rail_cdm.io import read_labels, validate_training_inventory
 
 RANDOM_SEED = 42
+SIDE_I_PROBABILITY_MULTIPLIER = 1.5
+SMOTE_TARGET_PER_FAULT_CLASS = 48
+SMOTE_NEIGHBORS = 2
 
 
-def make_model() -> Pipeline:
-    return Pipeline(
+def make_model(
+    *,
+    n_estimators: int = 500,
+    max_depth: int | None = None,
+    min_samples_leaf: int = 1,
+    min_samples_split: int = 2,
+    max_features: str | float = "sqrt",
+    class_weight: str | dict[str, float] | None = "balanced",
+    side_i_multiplier: float = SIDE_I_PROBABILITY_MULTIPLIER,
+    random_state: int = RANDOM_SEED,
+    **random_forest_options: Any,
+) -> ProbabilityAdjustedClassifier:
+    base_model = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
             (
                 "classifier",
                 RandomForestClassifier(
-                    n_estimators=500,
-                    class_weight="balanced",
-                    min_samples_leaf=1,
-                    max_features="sqrt",
+                    n_estimators=n_estimators,
+                    class_weight=class_weight,
+                    max_depth=max_depth,
+                    min_samples_leaf=min_samples_leaf,
+                    min_samples_split=min_samples_split,
+                    max_features=max_features,
                     n_jobs=-1,
+                    random_state=random_state,
+                    **random_forest_options,
+                ),
+            ),
+        ]
+    )
+    return ProbabilityAdjustedClassifier(
+        estimator=base_model,
+        class_multipliers=(("Side I", side_i_multiplier),),
+    )
+
+
+def make_final_model() -> ImbalancedPipeline:
+    """Build the promoted model with fold-safe moderate SMOTE oversampling."""
+    return ImbalancedPipeline(
+        [
+            (
+                "sampler",
+                SMOTE(
+                    sampling_strategy={
+                        "Side I": SMOTE_TARGET_PER_FAULT_CLASS,
+                        "Side II": SMOTE_TARGET_PER_FAULT_CLASS,
+                    },
+                    k_neighbors=SMOTE_NEIGHBORS,
                     random_state=RANDOM_SEED,
                 ),
             ),
+            ("model", make_model(min_samples_split=4, class_weight=None)),
         ]
     )
 
@@ -77,7 +122,7 @@ def main() -> None:
     if folds < 2:
         raise ValueError("At least two files are required in every class for cross-validation.")
 
-    model = make_model()
+    model = make_final_model()
     cross_validation = StratifiedKFold(n_splits=folds, shuffle=True, random_state=RANDOM_SEED)
     validation_predictions = cross_val_predict(model, x, y, cv=cross_validation, n_jobs=-1)
 
@@ -93,6 +138,14 @@ def main() -> None:
         "classification_report": report,
         "confusion_matrix_labels": labels_in_order,
         "confusion_matrix": matrix,
+        "decision_adjustment": {"Side I": SIDE_I_PROBABILITY_MULTIPLIER},
+        "training_configuration": {
+            "n_estimators": 500,
+            "max_features": "sqrt",
+            "min_samples_split": 4,
+            "smote_target_per_fault_class": SMOTE_TARGET_PER_FAULT_CLASS,
+            "smote_neighbors": SMOTE_NEIGHBORS,
+        },
     }
 
     print(f"\nCross-validated macro F1: {macro_f1:.4f}\n")
@@ -110,7 +163,7 @@ def main() -> None:
         "model": model,
         "feature_columns": feature_columns,
         "allowed_labels": labels_in_order,
-        "feature_version": 1,
+        "feature_version": FEATURE_VERSION,
     }
     model_path = args.artifact_dir / "rail_model.joblib"
     joblib.dump(bundle, model_path)

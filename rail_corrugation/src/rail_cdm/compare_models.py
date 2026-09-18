@@ -14,6 +14,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
+from rail_cdm.calibration import ProbabilityAdjustedClassifier
+from rail_cdm.train import make_final_model
+
 RANDOM_SEED = 42
 LABELS = ["Normal", "Side I", "Side II"]
 
@@ -26,6 +29,7 @@ def candidate_models() -> dict[str, Pipeline]:
         "random_state": RANDOM_SEED,
     }
     return {
+        "smote_random_forest_adjusted": make_final_model(),
         "extra_trees_leaf_1": Pipeline(
             [
                 ("imputer", SimpleImputer(strategy="median")),
@@ -64,6 +68,22 @@ def candidate_models() -> dict[str, Pipeline]:
                     ),
                 ),
             ]
+        ),
+        "random_forest_side_i_adjusted": ProbabilityAdjustedClassifier(
+            estimator=Pipeline(
+                [
+                    ("imputer", SimpleImputer(strategy="median")),
+                    (
+                        "classifier",
+                        RandomForestClassifier(
+                            **tree_common,
+                            min_samples_leaf=1,
+                            max_features="sqrt",
+                        ),
+                    ),
+                ]
+            ),
+            class_multipliers=(("Side I", 1.5),),
         ),
         "logistic_regression": Pipeline(
             [
