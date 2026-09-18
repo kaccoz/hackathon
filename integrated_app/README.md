@@ -19,7 +19,7 @@ Open http://127.0.0.1:8502/. Serve over HTTP; opening index.html directly will n
 | Rail | `components/rail/` | `../rail_corrugation/` |
 | Doors | `components/door/` | `../door/` |
 | Air conditioning / refrigerant leaks | `components/acv/` | `../acv/` |
-| Structural health | `components/shm/` | `../shm/` |
+| Structural health | `components/shm/` | `../shm_work/` (merged contribution) |
 
 Each component exports `config`, `renderInterpretation(state)` and `renderMethod()` from its own `index.js`. Edit that file and add local assets/helpers in your component folder. Refresh the browser to see changes. These are plain JavaScript modules with HTML templates, so no frontend build system is required.
 

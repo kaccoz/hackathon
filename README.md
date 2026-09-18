@@ -31,8 +31,8 @@ Start with [Rail setup and results](rail_corrugation/README.md),
 [demo narration/write-up](docs/rail-demo-and-writeup.md).
 [Cloud Run configuration](rail_corrugation/DEPLOYMENT.md) is prepared but deployment
 is not yet verified. Add the hosted URL and recorded video link once available.
-Door, ACV, SHM, and the integrated app remain scaffolds in this checkout; confirm
-teammates' latest branches before assembling the final team package.
+Door and SHM pipeline contributions are merged. Door lives in `door/`; the SHM contribution currently lives in `shm_work/`. ACV is awaiting its contribution.
+The shared UX outline is runnable from `integrated_app/`, with dedicated component UX folders and sample findings. The merged pipelines are not yet connected to that outline. See [shared UX setup and ownership](integrated_app/README.md).
 
 Ownership below identifies workstreams. Replace role labels with the actual team members
 and describe their completed contributions before submitting the final team README.
@@ -68,3 +68,9 @@ Before the event, review the [participant-pack readiness audit](docs/participant
 - Do not use hidden test answers to select features or models.
 - Keep the exact organizer filenames and prediction labels.
 - A subsystem is integration-ready only when its command can turn an input path into the exact required CSV.
+
+## Sync the shared UX before starting component design
+
+The combined baseline is on this repository’s `main` branch. In GitHub Desktop, fetch and pull `main`, then create your component design branch. If working in a fork, first use **Sync fork → Update branch** on GitHub, then fetch/pull locally. Commit or stash unfinished local work before switching branches.
+
+Component design folders: `integrated_app/components/rail/`, `door/`, `acv/`, and `shm/`. Each has its own README and page module. Keep shared navigation/style changes coordinated with the integrator.
