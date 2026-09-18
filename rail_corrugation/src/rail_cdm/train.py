@@ -6,13 +6,16 @@ from pathlib import Path
 from typing import Any
 
 import joblib
+import numpy as np
 import pandas as pd
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbalancedPipeline
+from sklearn.base import clone
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_selection import SelectKBest, VarianceThreshold, f_classif
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
-from sklearn.model_selection import StratifiedKFold, cross_val_predict
+from sklearn.model_selection import StratifiedKFold
 from sklearn.pipeline import Pipeline
 
 from rail_cdm.calibration import ProbabilityAdjustedClassifier
@@ -23,6 +26,18 @@ RANDOM_SEED = 42
 SIDE_I_PROBABILITY_MULTIPLIER = 1.5
 SMOTE_TARGET_PER_FAULT_CLASS = 48
 SMOTE_NEIGHBORS = 2
+SELECTED_FEATURE_COUNT = 30
+
+
+def moderate_fault_sampling_strategy(y: Any) -> dict[Any, int]:
+    """Expand every non-majority class without depending on its encoded label."""
+    counts = pd.Series(y).value_counts()
+    majority_class = counts.idxmax()
+    return {
+        class_name: SMOTE_TARGET_PER_FAULT_CLASS
+        for class_name, count in counts.items()
+        if class_name != majority_class and count < SMOTE_TARGET_PER_FAULT_CLASS
+    }
 
 
 def make_model(
@@ -66,13 +81,16 @@ def make_final_model() -> ImbalancedPipeline:
     """Build the promoted model with fold-safe moderate SMOTE oversampling."""
     return ImbalancedPipeline(
         [
+            ("feature_imputer", SimpleImputer(strategy="median")),
+            ("variance_filter", VarianceThreshold()),
+            (
+                "feature_selector",
+                SelectKBest(score_func=f_classif, k=SELECTED_FEATURE_COUNT),
+            ),
             (
                 "sampler",
                 SMOTE(
-                    sampling_strategy={
-                        "Side I": SMOTE_TARGET_PER_FAULT_CLASS,
-                        "Side II": SMOTE_TARGET_PER_FAULT_CLASS,
-                    },
+                    sampling_strategy=moderate_fault_sampling_strategy,
                     k_neighbors=SMOTE_NEIGHBORS,
                     random_state=RANDOM_SEED,
                 ),
@@ -124,9 +142,21 @@ def main() -> None:
 
     model = make_final_model()
     cross_validation = StratifiedKFold(n_splits=folds, shuffle=True, random_state=RANDOM_SEED)
-    validation_predictions = cross_val_predict(model, x, y, cv=cross_validation, n_jobs=-1)
-
     labels_in_order = ["Normal", "Side I", "Side II"]
+    validation_predictions = np.empty(len(dataset), dtype=object)
+    validation_probabilities = np.zeros((len(dataset), len(labels_in_order)), dtype=float)
+    for train_indices, validation_indices in cross_validation.split(x, y):
+        fold_model = clone(model)
+        fold_model.fit(x.iloc[train_indices], y.iloc[train_indices])
+        validation_predictions[validation_indices] = fold_model.predict(
+            x.iloc[validation_indices]
+        )
+        fold_probabilities = fold_model.predict_proba(x.iloc[validation_indices])
+        fold_classes = list(fold_model.classes_)
+        for destination_index, class_name in enumerate(labels_in_order):
+            validation_probabilities[validation_indices, destination_index] = fold_probabilities[
+                :, fold_classes.index(class_name)
+            ]
     macro_f1 = float(f1_score(y, validation_predictions, average="macro"))
     report = classification_report(
         y, validation_predictions, labels=labels_in_order, output_dict=True, zero_division=0
@@ -145,6 +175,7 @@ def main() -> None:
             "min_samples_split": 4,
             "smote_target_per_fault_class": SMOTE_TARGET_PER_FAULT_CLASS,
             "smote_neighbors": SMOTE_NEIGHBORS,
+            "selected_feature_count": SELECTED_FEATURE_COUNT,
         },
     }
 
@@ -155,6 +186,18 @@ def main() -> None:
 
     validation_frame = dataset[["filename", "label"]].copy()
     validation_frame["prediction"] = validation_predictions
+    for column, index in {
+        "probability_normal": 0,
+        "probability_side_i": 1,
+        "probability_side_ii": 2,
+    }.items():
+        validation_frame[column] = validation_probabilities[:, index]
+    ordered_probabilities = np.sort(validation_probabilities, axis=1)
+    validation_frame["confidence"] = ordered_probabilities[:, -1]
+    validation_frame["confidence_margin"] = (
+        ordered_probabilities[:, -1] - ordered_probabilities[:, -2]
+    )
+    validation_frame["correct"] = validation_frame["label"] == validation_frame["prediction"]
     validation_frame.to_csv(args.artifact_dir / "cross_validation_predictions.csv", index=False)
     (args.artifact_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
 

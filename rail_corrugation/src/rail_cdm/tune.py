@@ -10,6 +10,7 @@ import pandas as pd
 from imblearn.ensemble import BalancedRandomForestClassifier
 from imblearn.over_sampling import SMOTE, RandomOverSampler
 from imblearn.pipeline import Pipeline as ImbalancedPipeline
+from sklearn.feature_selection import SelectKBest, VarianceThreshold, f_classif
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import classification_report, f1_score
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
@@ -102,6 +103,23 @@ def stage_candidates(stage: str) -> dict[str, dict[str, Any]]:
             }
             for multiplier in (1.0, 1.15, 1.3, 1.5, 1.75, 2.0)
         }
+    if stage == "feature-selection":
+        common = {
+            "min_samples_split": 4,
+            "sampling": "smote",
+            "sampling_target": 48,
+            "smote_neighbors": 2,
+            "side_i_multiplier": 1.5,
+        }
+        candidates = {
+            f"top_{feature_count}_features": {
+                **common,
+                "feature_count": feature_count,
+            }
+            for feature_count in (30, 60, 100)
+        }
+        candidates["all_features"] = {**common, "feature_count": "all"}
+        return candidates
     raise ValueError(f"Unknown tuning stage: {stage}")
 
 
@@ -110,6 +128,7 @@ def make_candidate_model(parameters: dict[str, Any]) -> Any:
     sampling = options.pop("sampling", None)
     sampling_target = options.pop("sampling_target", None)
     smote_neighbors = options.pop("smote_neighbors", None)
+    feature_count = options.pop("feature_count", None)
 
     if sampling is None:
         return make_model(**options)
@@ -149,12 +168,29 @@ def make_candidate_model(parameters: dict[str, Any]) -> Any:
     else:
         raise ValueError(f"Unknown sampling method: {sampling}")
 
-    return ImbalancedPipeline(
+    steps: list[tuple[str, Any]] = []
+    if feature_count is not None:
+        # Both steps are fitted again inside every validation fold, preventing data leakage.
+        steps.extend(
+            [
+                ("feature_imputer", SimpleImputer(strategy="median")),
+                ("variance_filter", VarianceThreshold()),
+                (
+                    "feature_selector",
+                    SelectKBest(
+                        score_func=f_classif,
+                        k=feature_count if feature_count == "all" else int(feature_count),
+                    ),
+                ),
+            ]
+        )
+    steps.extend(
         [
             ("sampler", sampler),
             ("model", make_model(class_weight=None, **options)),
         ]
     )
+    return ImbalancedPipeline(steps)
 
 
 def summarize_results(results: pd.DataFrame) -> pd.DataFrame:
@@ -238,6 +274,7 @@ def build_parser() -> argparse.ArgumentParser:
             "max-features",
             "class-imbalance",
             "smote-calibration",
+            "feature-selection",
         ],
         required=True,
     )

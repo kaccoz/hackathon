@@ -1,6 +1,7 @@
 import pandas as pd
+from sklearn.feature_selection import SelectKBest
 
-from rail_cdm.tune import stage_candidates, summarize_results
+from rail_cdm.tune import make_candidate_model, stage_candidates, summarize_results
 
 
 def test_tree_count_stage_keeps_other_settings_fixed() -> None:
@@ -48,6 +49,22 @@ def test_smote_calibration_changes_only_decision_multiplier() -> None:
     assert candidates["side_i_multiplier_1.5"]["side_i_multiplier"] == 1.5
     assert all(parameters["sampling"] == "smote" for parameters in candidates.values())
     assert all(parameters["sampling_target"] == 48 for parameters in candidates.values())
+
+
+def test_feature_selection_stage_keeps_selection_inside_validation_pipeline() -> None:
+    candidates = stage_candidates("feature-selection")
+    parameters = candidates["top_60_features"]
+    model = make_candidate_model(parameters)
+
+    assert list(candidates) == [
+        "top_30_features",
+        "top_60_features",
+        "top_100_features",
+        "all_features",
+    ]
+    assert isinstance(model.named_steps["feature_selector"], SelectKBest)
+    assert model.named_steps["feature_selector"].k == 60
+    assert model.named_steps["sampler"].sampling_strategy == {"Side I": 48, "Side II": 48}
 
 
 def test_summary_orders_candidates_by_average_macro_f1() -> None:

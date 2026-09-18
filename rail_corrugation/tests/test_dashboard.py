@@ -47,3 +47,23 @@ def test_validation_errors_only_returns_mistakes() -> None:
     assert result.to_dict("records") == [
         {"File": "two.csv", "Actual": "Side I", "Predicted": "Side II"}
     ]
+
+
+def test_validation_errors_keeps_probability_evidence() -> None:
+    predictions = pd.DataFrame(
+        {
+            "filename": ["one.csv"],
+            "label": ["Side I"],
+            "prediction": ["Normal"],
+            "probability_normal": [0.52],
+            "probability_side_i": [0.45],
+            "probability_side_ii": [0.03],
+            "confidence": [0.52],
+            "confidence_margin": [0.07],
+        }
+    )
+
+    result = validation_errors(predictions)
+
+    assert result.loc[0, "P(Side I)"] == 0.45
+    assert result.loc[0, "Margin"] == 0.07

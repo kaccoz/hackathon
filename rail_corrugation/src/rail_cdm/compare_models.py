@@ -5,7 +5,14 @@ import json
 from pathlib import Path
 
 import pandas as pd
-from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline as ImbalancedPipeline
+from sklearn.ensemble import (
+    ExtraTreesClassifier,
+    GradientBoostingClassifier,
+    RandomForestClassifier,
+)
+from sklearn.feature_selection import SelectKBest, VarianceThreshold, f_classif
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, f1_score
@@ -15,7 +22,11 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
 from rail_cdm.calibration import ProbabilityAdjustedClassifier
-from rail_cdm.train import make_final_model
+from rail_cdm.train import (
+    SELECTED_FEATURE_COUNT,
+    make_final_model,
+    moderate_fault_sampling_strategy,
+)
 
 RANDOM_SEED = 42
 LABELS = ["Normal", "Side I", "Side II"]
@@ -30,6 +41,36 @@ def candidate_models() -> dict[str, Pipeline]:
     }
     return {
         "smote_random_forest_adjusted": make_final_model(),
+        "smote_gradient_boosting_adjusted": ImbalancedPipeline(
+            [
+                ("imputer", SimpleImputer(strategy="median")),
+                ("variance_filter", VarianceThreshold()),
+                (
+                    "feature_selector",
+                    SelectKBest(score_func=f_classif, k=SELECTED_FEATURE_COUNT),
+                ),
+                (
+                    "sampler",
+                    SMOTE(
+                        sampling_strategy=moderate_fault_sampling_strategy,
+                        k_neighbors=2,
+                        random_state=RANDOM_SEED,
+                    ),
+                ),
+                (
+                    "classifier",
+                    ProbabilityAdjustedClassifier(
+                        estimator=GradientBoostingClassifier(
+                            n_estimators=150,
+                            learning_rate=0.05,
+                            max_depth=3,
+                            random_state=RANDOM_SEED,
+                        ),
+                        class_multipliers=(("Side I", 1.5),),
+                    ),
+                ),
+            ]
+        ),
         "extra_trees_leaf_1": Pipeline(
             [
                 ("imputer", SimpleImputer(strategy="median")),

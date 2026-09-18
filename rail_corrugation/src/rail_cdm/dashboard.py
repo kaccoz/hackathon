@@ -48,8 +48,28 @@ def validation_errors(predictions: pd.DataFrame) -> pd.DataFrame:
     if missing:
         raise ValueError(f"Validation predictions are missing columns: {sorted(missing)}")
 
+    optional_columns = [
+        "probability_normal",
+        "probability_side_i",
+        "probability_side_ii",
+        "confidence",
+        "confidence_margin",
+    ]
+    selected_columns = ["filename", "label", "prediction"] + [
+        column for column in optional_columns if column in predictions.columns
+    ]
     errors = predictions.loc[
-        predictions["label"] != predictions["prediction"],
-        ["filename", "label", "prediction"],
+        predictions["label"] != predictions["prediction"], selected_columns
     ].copy()
-    return errors.rename(columns={"filename": "File", "label": "Actual", "prediction": "Predicted"})
+    return errors.rename(
+        columns={
+            "filename": "File",
+            "label": "Actual",
+            "prediction": "Predicted",
+            "probability_normal": "P(Normal)",
+            "probability_side_i": "P(Side I)",
+            "probability_side_ii": "P(Side II)",
+            "confidence": "Confidence",
+            "confidence_margin": "Margin",
+        }
+    )

@@ -154,6 +154,10 @@ with performance_tab:
             validation_predictions = pd.read_csv(CV_PREDICTIONS_PATH)
             mistakes = validation_errors(validation_predictions)
             with st.expander(f"Review the {len(mistakes)} incorrect validation files"):
+                st.caption(
+                    "Confidence is the winning probability. Margin is the gap between the "
+                    "first and second choices; a small margin means the model was uncertain."
+                )
                 selected_class = st.selectbox(
                     "Show actual class",
                     ["All", *metrics["confusion_matrix_labels"]],
@@ -161,7 +165,33 @@ with performance_tab:
                 shown_mistakes = mistakes
                 if selected_class != "All":
                     shown_mistakes = mistakes.loc[mistakes["Actual"] == selected_class]
-                st.dataframe(shown_mistakes, width="stretch", hide_index=True)
+                probability_columns = [
+                    column
+                    for column in [
+                        "P(Normal)",
+                        "P(Side I)",
+                        "P(Side II)",
+                        "Confidence",
+                        "Margin",
+                    ]
+                    if column in shown_mistakes.columns
+                ]
+                st.dataframe(
+                    shown_mistakes.style.format(
+                        {column: "{:.1%}" for column in probability_columns}
+                    ),
+                    width="stretch",
+                    hide_index=True,
+                )
+
+                error_routes = (
+                    mistakes.groupby(["Actual", "Predicted"], as_index=False)
+                    .size()
+                    .rename(columns={"size": "Files"})
+                    .sort_values("Files", ascending=False)
+                )
+                st.markdown("##### Error routes")
+                st.dataframe(error_routes, width="stretch", hide_index=True)
 
         tuning_files = sorted(TUNING_DIR.glob("*_summary.csv"))
         if tuning_files:

@@ -73,12 +73,13 @@ Training creates:
 
 The headline metric is macro F1. Always inspect the individual Side I and Side II scores too.
 
-The fitted Random Forest uses moderate fold-safe SMOTE oversampling (Side I and Side II are each
-expanded to 48 training rows), requires four samples before splitting a node, and applies a fixed
-`1.5×` multiplier to Side I probability before choosing the final class. Repeated five-fold
-validation selected this configuration. More aggressive full balancing performed worse. The
-tested Welch, robust-statistic, and short-window feature families were also rejected and are not
-used by the final model.
+The fitted Random Forest first keeps the 30 strongest measurements inside each validation fold,
+then uses moderate fold-safe SMOTE oversampling (Side I and Side II are each expanded to 48
+training rows). It requires four samples before splitting a node and applies a fixed `1.5×`
+multiplier to Side I probability before choosing the final class. Repeated five-fold validation
+selected this configuration. More aggressive full balancing performed worse. The tested Welch,
+robust-statistic, and short-window feature families were also rejected and are not used by the
+final model.
 
 Run one reproducible tuning stage at a time. For example, compare 200, 500, and 1,000 trees
 across five shuffled five-fold validations with:
