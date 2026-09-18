@@ -24,6 +24,7 @@ dev = ["pytest>=8,<9", "ruff>=0.6,<1"]
 rail-inspect = "rail_cdm.inspect_data:main"
 rail-train = "rail_cdm.train:main"
 rail-predict = "rail_cdm.predict:main"
+rail-compare = "rail_cdm.compare_models:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

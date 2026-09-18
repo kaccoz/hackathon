@@ -35,6 +35,8 @@ Each owner decides the internal modelling approach but must follow [`shared/PIPE
 
 The Rail workspace already contains a complete beginner-friendly baseline. The other workspaces begin with their data contract and task checklist so their owners can add code independently.
 
+Before the event, review the [participant-pack readiness audit](docs/participant-pack-audit.md) and the [Google tools guide](docs/google-tools-guide.md).
+
 ## Repository rules
 
 - Do not commit organizer datasets; every member copies them into their own ignored `data/raw/` directory.
@@ -42,4 +44,3 @@ The Rail workspace already contains a complete beginner-friendly baseline. The o
 - Do not use hidden test answers to select features or models.
 - Keep the exact organizer filenames and prediction labels.
 - A subsystem is integration-ready only when its command can turn an input path into the exact required CSV.
-

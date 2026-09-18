@@ -11,7 +11,7 @@ Raw CSV recording
   -> validate its 129-column sensor layout
   -> calculate time- and frequency-domain features
   -> compare Side I with Side II
-  -> Extra Trees classifier
+  -> class-weighted Random Forest classifier
   -> Normal / Side I / Side II
 ```
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
-from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
@@ -24,10 +24,10 @@ def make_model() -> Pipeline:
             ("imputer", SimpleImputer(strategy="median")),
             (
                 "classifier",
-                ExtraTreesClassifier(
+                RandomForestClassifier(
                     n_estimators=500,
                     class_weight="balanced",
-                    min_samples_leaf=2,
+                    min_samples_leaf=1,
                     max_features="sqrt",
                     n_jobs=-1,
                     random_state=RANDOM_SEED,
