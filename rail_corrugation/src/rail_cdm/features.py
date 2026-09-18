@@ -5,6 +5,7 @@ import pandas as pd
 from scipy.stats import kurtosis
 
 SAMPLE_RATE_HZ = 10_000
+FEATURE_VERSION = 1
 FREQUENCY_BANDS_HZ = (
     (0, 50),
     (50, 100),

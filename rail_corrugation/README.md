@@ -73,6 +73,27 @@ Training creates:
 
 The headline metric is macro F1. Always inspect the individual Side I and Side II scores too.
 
+The fitted Random Forest first keeps the 30 strongest measurements inside each validation fold,
+then uses moderate fold-safe SMOTE oversampling (Side I and Side II are each expanded to 48
+training rows). It requires four samples before splitting a node and applies a fixed `1.5×`
+multiplier to Side I probability before choosing the final class. Repeated five-fold validation
+selected this configuration. More aggressive full balancing performed worse. The tested Welch,
+robust-statistic, and short-window feature families were also rejected and are not used by the
+final model.
+
+Run one reproducible tuning stage at a time. For example, compare 200, 500, and 1,000 trees
+across five shuffled five-fold validations with:
+
+```bash
+rail-tune \
+  --features data/processed/rail_features.csv \
+  --labels data/raw/rail/Train_Labels.csv \
+  --stage tree-count
+```
+
+Detailed and averaged results are written under `outputs/tuning/`. Tuning does not replace the
+active model automatically.
+
 ## 5. Produce test predictions
 
 ```bash
@@ -96,7 +117,12 @@ Test2.csv,Side II
 streamlit run app.py
 ```
 
-Upload one or more Rail CSV files, view predictions, and download `rail_predictions.csv`. The same saved model is used by both the command line and the app.
+The app has two tabs:
+
+- **Predict files** — upload Rail CSV files, view predictions and confidence, and download `rail_predictions.csv`.
+- **Model performance** — see macro F1, ordinary accuracy, per-class precision/recall/F1, class imbalance, the confusion matrix, incorrect validation files, tuning experiments, and model comparisons.
+
+The dashboard reads the files created by `rail-train` and `rail-compare`, so rerunning those commands automatically refreshes the displayed results. The same saved model is used by both the command line and the app.
 
 ## Team workflow
 
@@ -114,6 +140,7 @@ Short version:
 
 ```text
 app.py                         Streamlit user interface
+src/rail_cdm/dashboard.py      Dashboard data preparation
 src/rail_cdm/io.py             Loading and validation
 src/rail_cdm/features.py       Signal-to-feature conversion
 src/rail_cdm/inspect_data.py   Dataset report and plots
