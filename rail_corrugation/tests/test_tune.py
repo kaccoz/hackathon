@@ -67,6 +67,14 @@ def test_feature_selection_stage_keeps_selection_inside_validation_pipeline() ->
     assert model.named_steps["sampler"].sampling_strategy == {"Side I": 48, "Side II": 48}
 
 
+def test_hierarchical_stage_compares_side_specialists() -> None:
+    candidates = stage_candidates("hierarchical-model")
+
+    assert candidates["hierarchical_rf_side_10"]["side_feature_count"] == 10
+    assert candidates["hierarchical_logistic_side_20"]["side_model"] == "logistic_regression"
+    assert candidates["hierarchical_rf_side_20_adjusted"]["side_i_multiplier"] == 1.5
+
+
 def test_summary_orders_candidates_by_average_macro_f1() -> None:
     results = pd.DataFrame(
         {

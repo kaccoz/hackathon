@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from io import BytesIO
 from pathlib import Path
 
@@ -15,12 +16,15 @@ from rail_cdm.dashboard import (
 )
 from rail_cdm.features import extract_features
 from rail_cdm.io import ALLOWED_LABELS, read_sensor_csv
+from rail_cdm.predict import validate_prediction_output
 
-MODEL_PATH = Path("artifacts/rail_model.joblib")
-METRICS_PATH = Path("artifacts/metrics.json")
-CV_PREDICTIONS_PATH = Path("artifacts/cross_validation_predictions.csv")
-MODEL_COMPARISON_PATH = Path("outputs/model_comparison.csv")
-TUNING_DIR = Path("outputs/tuning")
+APP_ROOT = Path(__file__).resolve().parent
+MODEL_PATH = APP_ROOT / "artifacts/rail_model.joblib"
+METRICS_PATH = APP_ROOT / "artifacts/metrics.json"
+CV_PREDICTIONS_PATH = APP_ROOT / "artifacts/cross_validation_predictions.csv"
+MODEL_COMPARISON_PATH = APP_ROOT / "outputs/model_comparison.csv"
+TUNING_DIR = APP_ROOT / "outputs/tuning"
+SHIFT_AUDIT_PATH = APP_ROOT / "outputs/generalization/distribution_shift.json"
 
 st.set_page_config(page_title="Rail Corrugation Monitor", page_icon="🚆", layout="wide")
 st.title("Rail Corrugation Monitor")
@@ -33,6 +37,9 @@ with prediction_tab:
     st.write(
         "Upload one or more one-second axle-box sensor CSV files. The saved model will "
         "classify each file as Normal, Side I, or Side II."
+    )
+    st.caption(
+        "Each CSV must contain 10,000 readings and 129 columns: speed, then 128 sensor channels."
     )
 
     if not MODEL_PATH.exists():
@@ -47,6 +54,7 @@ with prediction_tab:
         if uploads:
             rows: list[dict[str, object]] = []
             details: list[dict[str, object]] = []
+            evidence: dict[str, dict[str, float]] = {}
 
             with st.spinner("Extracting signal features and making predictions..."):
                 for upload in uploads:
@@ -61,6 +69,10 @@ with prediction_tab:
                             raise ValueError(f"Unexpected model output: {prediction}")
 
                         rows.append({"file_id": upload.name, "prediction": prediction})
+                        evidence[upload.name] = {
+                            "Side I": features["side1_vibration_rms_mean"],
+                            "Side II": features["side2_vibration_rms_mean"],
+                        }
                         details.append(
                             {
                                 "file": upload.name,
@@ -78,14 +90,34 @@ with prediction_tab:
                 predictions = pd.DataFrame(rows, columns=["file_id", "prediction"])
                 st.subheader("Predictions")
                 st.dataframe(pd.DataFrame(details).style.format(precision=3), width="stretch")
-
-                csv_bytes = predictions.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    "Download rail_predictions.csv",
-                    data=BytesIO(csv_bytes),
-                    file_name="rail_predictions.csv",
-                    mime="text/csv",
+                st.caption(
+                    "Class scores include the fixed Side I adjustment. They are model scores, "
+                    "not a measured probability that a prediction is correct."
                 )
+                selected_file = st.selectbox("Signal comparison for", list(evidence))
+                st.bar_chart(
+                    pd.DataFrame.from_dict(
+                        evidence[selected_file], orient="index", columns=["Mean vibration RMS"]
+                    )
+                )
+                st.caption(
+                    "RMS summarizes measured vibration strength across each side. "
+                    "This is supporting signal evidence; the classifier uses 30 measurements."
+                )
+
+                try:
+                    validate_prediction_output(predictions, [upload.name for upload in uploads])
+                except ValueError as exc:
+                    st.warning(str(exc))
+                else:
+                    st.success(f"All {len(predictions)} recordings are ready to download.")
+                    csv_bytes = predictions.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        "Download rail_predictions.csv",
+                        data=BytesIO(csv_bytes),
+                        file_name="rail_predictions.csv",
+                        mime="text/csv",
+                    )
 
 with performance_tab:
     st.subheader("Cross-validation results")
@@ -192,6 +224,28 @@ with performance_tab:
                 )
                 st.markdown("##### Error routes")
                 st.dataframe(error_routes, width="stretch", hide_index=True)
+
+        if SHIFT_AUDIT_PATH.exists():
+            shift_audit = json.loads(SHIFT_AUDIT_PATH.read_text(encoding="utf-8"))
+            st.markdown("#### Generalization check")
+            st.caption(
+                "This check does not use hidden test answers. It asks whether the selected "
+                "measurements in the test files look unlike those in training."
+            )
+            auc_column, ks_column, features_column = st.columns(3)
+            auc_column.metric(
+                "Train/test distinguishability",
+                f"{shift_audit['domain_classifier_auc']:.3f} AUC",
+            )
+            ks_column.metric(
+                "Median feature shift",
+                f"{shift_audit['median_ks_statistic']:.3f} KS",
+            )
+            features_column.metric("Measurements checked", shift_audit["selected_features"])
+            st.info(
+                "An AUC near 0.5 means the audit model cannot reliably tell training and test "
+                "files apart. That is reassuring, although it cannot reveal the hidden labels."
+            )
 
         tuning_files = sorted(TUNING_DIR.glob("*_summary.csv"))
         if tuning_files:

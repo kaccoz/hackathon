@@ -27,6 +27,10 @@ rail-train = "rail_cdm.train:main"
 rail-predict = "rail_cdm.predict:main"
 rail-compare = "rail_cdm.compare_models:main"
 rail-tune = "rail_cdm.tune:main"
+rail-audit-shift = "rail_cdm.audit_shift:main"
+rail-compare-views = "rail_cdm.compare_views:main"
+rail-compare-instances = "rail_cdm.compare_instances:main"
+rail-compare-periodicity = "rail_cdm.compare_periodicity:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

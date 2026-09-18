@@ -17,6 +17,7 @@ from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from sklearn.pipeline import Pipeline
 
 from rail_cdm.calibration import ProbabilityAdjustedClassifier
+from rail_cdm.hierarchical import make_hierarchical_model
 from rail_cdm.train import RANDOM_SEED, SIDE_I_PROBABILITY_MULTIPLIER, make_model
 
 LABELS = ["Normal", "Side I", "Side II"]
@@ -120,11 +121,51 @@ def stage_candidates(stage: str) -> dict[str, dict[str, Any]]:
         }
         candidates["all_features"] = {**common, "feature_count": "all"}
         return candidates
+    if stage == "hierarchical-model":
+        return {
+            "hierarchical_rf_side_10": {
+                "model_type": "hierarchical",
+                "side_model": "random_forest",
+                "side_feature_count": 10,
+            },
+            "hierarchical_rf_side_20": {
+                "model_type": "hierarchical",
+                "side_model": "random_forest",
+                "side_feature_count": 20,
+            },
+            "hierarchical_rf_side_30": {
+                "model_type": "hierarchical",
+                "side_model": "random_forest",
+                "side_feature_count": 30,
+            },
+            "hierarchical_logistic_side_20": {
+                "model_type": "hierarchical",
+                "side_model": "logistic_regression",
+                "side_feature_count": 20,
+            },
+            "hierarchical_rf_side_20_adjusted": {
+                "model_type": "hierarchical",
+                "side_model": "random_forest",
+                "side_feature_count": 20,
+                "side_i_multiplier": 1.5,
+            },
+            "hierarchical_logistic_side_20_adjusted": {
+                "model_type": "hierarchical",
+                "side_model": "logistic_regression",
+                "side_feature_count": 20,
+                "side_i_multiplier": 1.5,
+            },
+        }
     raise ValueError(f"Unknown tuning stage: {stage}")
 
 
 def make_candidate_model(parameters: dict[str, Any]) -> Any:
     options = parameters.copy()
+    model_type = options.pop("model_type", "random_forest")
+    if model_type == "hierarchical":
+        return make_hierarchical_model(**options)
+    if model_type != "random_forest":
+        raise ValueError(f"Unknown model type: {model_type}")
     sampling = options.pop("sampling", None)
     sampling_target = options.pop("sampling_target", None)
     smote_neighbors = options.pop("smote_neighbors", None)
@@ -275,6 +316,7 @@ def build_parser() -> argparse.ArgumentParser:
             "class-imbalance",
             "smote-calibration",
             "feature-selection",
+            "hierarchical-model",
         ],
         required=True,
     )

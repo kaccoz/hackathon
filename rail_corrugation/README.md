@@ -2,7 +2,7 @@
 
 This repository is the team's shared starting point for the Rail Corrugation part of Problem Statement 3.
 
-It turns each 10,000-row sensor recording into a small row of useful signal summaries, trains a class-weighted model, checks it with stratified cross-validation, predicts the test files, and creates the required `rail_predictions.csv`.
+It turns each 10,000-row sensor recording into a small row of useful signal summaries, trains a feature-selected Random Forest, checks it with stratified cross-validation, predicts the test files, and creates the required `rail_predictions.csv`.
 
 ## What the model does
 
@@ -11,7 +11,8 @@ Raw CSV recording
   -> validate its 129-column sensor layout
   -> calculate time- and frequency-domain features
   -> compare Side I with Side II
-  -> class-weighted Random Forest classifier
+  -> select 30 measurements and apply moderate SMOTE
+  -> Random Forest classifier with a fixed Side I adjustment
   -> Normal / Side I / Side II
 ```
 
@@ -94,6 +95,19 @@ rail-tune \
 Detailed and averaged results are written under `outputs/tuning/`. Tuning does not replace the
 active model automatically.
 
+Check whether the selected measurements have a major train/test distribution shift without using
+the hidden test answers:
+
+```bash
+rail-audit-shift \
+  --train-features data/processed/rail_features.csv \
+  --test-dir data/raw/rail/Test \
+  --model artifacts/rail_model.joblib
+```
+
+An audit classifier AUC near `0.5` means it cannot reliably distinguish training files from test
+files, which is reassuring but does not guarantee the hidden-label score.
+
 ## 5. Produce test predictions
 
 ```bash
@@ -150,6 +164,25 @@ tests/                         Fast checks with synthetic data
 docs/team-workflow.md          Four-person collaboration process
 ```
 
-## Baseline limitations
+## Final model status
 
-This is deliberately a clear baseline rather than a claimed winning model. Likely improvement areas are speed-normalized frequency features, better frequency bands, consistency across cars, feature selection, and model comparison. Every improvement should be accepted only when repeated cross-validation supports it.
+The active model is frozen at fixed five-fold macro F1 **0.823353**, repeated mean
+macro F1 **0.822854**, and fixed-split Side I recall **78.6%**. The 68 test predictions
+were reproduced exactly during the final readiness pass. Additional model complexity
+was rejected when repeated validation did not support it. Rotating-speed units remain
+unconfirmed, so physical order tracking is deferred.
+
+The app rejects recordings that do not contain 10,000 rows and blocks batch download
+if any upload fails or filenames are duplicated. Its side-comparison chart shows measured
+vibration evidence, while adjusted class scores are explicitly labelled as model scores.
+
+See [final readiness](FINAL_READINESS.md), [Cloud Run deployment](DEPLOYMENT.md), and
+[demo script and write-up](../docs/rail-demo-and-writeup.md). Cloud configuration is prepared;
+the container build and hosted URL still require verification in the assigned project.
+
+## Random Forest refinement (19 September 2026)
+
+A bounded comparison of 19 variants retained the active 30-feature model: none improved
+its five-seed mean macro F1 of **0.822854**. See [results and reproduction steps](OPTIMIZATION_RESULTS.md).
+The research runner is available as `python -m rail_cdm.optimize_rf`; it saves experiment
+reports without replacing the active model or official predictions.
